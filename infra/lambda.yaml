@@ -1,0 +1,116 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Deploys Lambda functions for create_table and insert_table jobs with necessary IAM permissions and environment variables.
+
+Parameters:
+  LambdaCodeBucketName:
+    Type: String
+    Description: Name of the S3 bucket for Lambda code
+  CreateTableZipKey:
+    Type: String
+    Description: S3 key for create_table Lambda zip
+  InsertTableZipKey:
+    Type: String
+    Description: S3 key for insert_table Lambda zip
+  RdsHost:
+    Type: String
+    Description: RDS endpoint/host
+  RdsPort:
+    Type: String
+    Description: RDS port
+  RdsDb:
+    Type: String
+    Description: RDS database name
+  RdsTable:
+    Type: String
+    Default: ships
+    Description: RDS table name (for insert_table)
+  RdsSecretArn:
+    Type: String
+    Description: Secrets Manager ARN for DB credentials
+  VpcSubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: List of private subnet IDs for Lambda VPC config
+  SecurityGroupIds:
+    Type: List<AWS::EC2::SecurityGroup::Id>
+    Description: List of security group IDs for Lambda VPC config
+
+Resources:
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Path: "/"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: LambdaRdsSecretsPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource: !Ref RdsSecretArn
+              - Effect: Allow
+                Action:
+                  - rds-db:connect
+                Resource: "*"
+
+  CreateTableFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: create-table-job
+      Handler: lambda.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Code:
+        S3Bucket: !Ref LambdaCodeBucketName
+        S3Key: !Ref CreateTableZipKey
+      Runtime: python3.11
+      Timeout: 60
+      MemorySize: 512
+      Environment:
+        Variables:
+          RDS_HOST: !Ref RdsHost
+          RDS_PORT: !Ref RdsPort
+          RDS_DB: !Ref RdsDb
+          RDS_SECRET_ARN: !Ref RdsSecretArn
+      VpcConfig:
+        SubnetIds: !Ref VpcSubnetIds
+        SecurityGroupIds: !Ref SecurityGroupIds
+
+  InsertTableFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: insert-table-job
+      Handler: lambda.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Code:
+        S3Bucket: !Ref LambdaCodeBucketName
+        S3Key: !Ref InsertTableZipKey
+      Runtime: python3.11
+      Timeout: 300
+      MemorySize: 1024
+      Environment:
+        Variables:
+          RDS_HOST: !Ref RdsHost
+          RDS_PORT: !Ref RdsPort
+          RDS_DB: !Ref RdsDb
+          RDS_TABLE: !Ref RdsTable
+          RDS_SECRET_ARN: !Ref RdsSecretArn
+      VpcConfig:
+        SubnetIds: !Ref VpcSubnetIds
+        SecurityGroupIds: !Ref SecurityGroupIds
+
+Outputs:
+  CreateTableFunctionArn:
+    Description: ARN of the create_table Lambda function
+    Value: !GetAtt CreateTableFunction.Arn
+  InsertTableFunctionArn:
+    Description: ARN of the insert_table Lambda function
+    Value: !GetAtt InsertTableFunction.Arn

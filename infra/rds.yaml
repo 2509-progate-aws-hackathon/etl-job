@@ -1,0 +1,118 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Aurora Serverless v2 PostgreSQL Cluster using AWS Secrets Manager for master credentials (Tokyo-region, scale-to-zero capable default)
+
+Parameters:
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC ID where DB cluster will reside
+  PrivateSubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: List of private subnet IDs (at least 2 AZs)
+  AccessSecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+    Description: Security group ID that will need access (e.g. AppSync or Lambda SG)
+  DatabaseName:
+    Type: String
+    Default: mydatabase
+    Description: The name of the initial database to create
+  EngineVersion:
+    Type: String
+    Default: '13.15'
+    Description: Aurora PostgreSQL engine version (must support zero-capacity / auto-pause; e.g. 13.15+, 14.12+, etc.)
+  MinCapacityACU:
+    Type: Number
+    Default: 0
+    Description: Minimum Aurora ACU capacity (0 = supports scale-to-zero if engine version supports)
+  MaxCapacityACU:
+    Type: Number
+    Default: 1
+    Description: Maximum Aurora ACU capacity
+  SecondsUntilAutoPause:
+    Type: Number
+    Default: 300
+    Description: Number of seconds of inactivity before auto-pause
+
+Resources:
+
+  DBMasterUserSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub "${AWS::StackName}-db-master-secret"
+      Description: "Master credentials for Aurora Serverless PostgreSQL"
+      GenerateSecretString:
+        SecretStringTemplate: !Sub '{"username":"masteruser"}'
+        GenerateStringKey: "password"
+        PasswordLength: 32
+        ExcludeCharacters: '"@/\\'
+
+  DBSecretAttachment:
+    Type: AWS::SecretsManager::SecretTargetAttachment
+    Properties:
+      SecretId: !Ref DBMasterUserSecret
+      TargetId: !Ref AuroraDBCluster
+      TargetType: AWS::RDS::DBCluster
+
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: "Subnet group for Aurora Serverless v2 cluster"
+      SubnetIds: !Ref PrivateSubnetIds
+
+  DBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: "Security group for Aurora PostgreSQL access"
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          SourceSecurityGroupId: !Ref AccessSecurityGroupId
+
+  AuroraDBCluster:
+    Type: AWS::RDS::DBCluster
+    Properties:
+      Engine: aurora-postgresql
+      EngineVersion: !Ref EngineVersion
+      DatabaseName: !Ref DatabaseName
+      MasterUsername: !Join ['', ['{{resolve:secretsmanager:', !Ref DBMasterUserSecret, ':SecretString:username}}']]
+      MasterUserPassword: !Join ['', ['{{resolve:secretsmanager:', !Ref DBMasterUserSecret, ':SecretString:password}}']]
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      VpcSecurityGroupIds:
+        - !Ref DBSecurityGroup
+      ServerlessV2ScalingConfiguration:
+        MinCapacity: !Ref MinCapacityACU
+        MaxCapacity: !Ref MaxCapacityACU
+        SecondsUntilAutoPause: !Ref SecondsUntilAutoPause
+      PubliclyAccessible: false
+      BackupRetentionPeriod: 1
+      DeletionProtection: false
+
+  AuroraDBInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBClusterIdentifier: !Ref AuroraDBCluster
+      Engine: aurora-postgresql
+      DBInstanceClass: db.serverless
+      PubliclyAccessible: false
+
+Outputs:
+  DBClusterIdentifier:
+    Description: Identifier for Aurora DB cluster
+    Value: !Ref AuroraDBCluster
+
+  DBEndpoint:
+    Description: Endpoint address for connecting to Aurora (writer)
+    Value: !GetAtt AuroraDBCluster.Endpoint.Address
+
+  DBPort:
+    Description: Port for connections
+    Value: !GetAtt AuroraDBCluster.Endpoint.Port
+
+  DBSecretArn:
+    Description: ARN of the Secrets Manager secret storing DB master credentials
+    Value: !Ref DBMasterUserSecret
+
+  DBSecurityGroupId:
+    Description: Security Group ID used by the Aurora cluster
+    Value: !Ref DBSecurityGroup

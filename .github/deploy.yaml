@@ -1,0 +1,122 @@
+# 必須パラメータまとめ:
+# - secrets.AWS_ACCESS_KEY_ID, secrets.AWS_SECRET_ACCESS_KEY, secrets.AWS_REGION
+
+name: Deploy Full Stack (Network, RDS, Lambda)
+on:
+  push:
+    branches: [main]
+
+env:
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Deploy Network Stack
+        run: |
+          aws cloudformation deploy \
+            --template-file infra/network.yaml \
+            --stack-name my-network-stack \
+            --capabilities CAPABILITY_NAMED_IAM
+
+      - name: Get Network Outputs
+        id: network-outputs
+        run: |
+          VPC_ID=$(aws cloudformation describe-stacks --stack-name my-network-stack --query "Stacks[0].Outputs[?OutputKey=='VpcId'].OutputValue" --output text)
+          PRIVATE_SUBNET_IDS=$(aws cloudformation describe-stacks --stack-name my-network-stack --query "Stacks[0].Outputs[?OutputKey=='PrivateSubnetIds'].OutputValue" --output text)
+          APP_SG_ID=$(aws cloudformation describe-stacks --stack-name my-network-stack --query "Stacks[0].Outputs[?OutputKey=='AppSecurityGroupId'].OutputValue" --output text)
+          echo "VPC_ID=$VPC_ID" >> $GITHUB_ENV
+          echo "PRIVATE_SUBNET_IDS=$PRIVATE_SUBNET_IDS" >> $GITHUB_ENV
+          echo "APP_SG_ID=$APP_SG_ID" >> $GITHUB_ENV
+
+      - name: Deploy Aurora RDS Stack
+        run: |
+          aws cloudformation deploy \
+            --template-file infra/rds.yaml \
+            --stack-name my-aurora-serverless-stack \
+            --capabilities CAPABILITY_NAMED_IAM \
+            --parameter-overrides \
+              VpcId=$VPC_ID \
+              PrivateSubnetIds="$PRIVATE_SUBNET_IDS" \
+              AccessSecurityGroupId=$APP_SG_ID \
+              DatabaseName=${{ secrets.RDS_DB }} \
+              EngineVersion=13.15
+
+      - name: Get RDS Outputs
+        id: rds-outputs
+        run: |
+          RDS_HOST=$(aws cloudformation describe-stacks --stack-name my-aurora-serverless-stack --query "Stacks[0].Outputs[?OutputKey=='DBEndpoint'].OutputValue" --output text)
+          RDS_PORT=$(aws cloudformation describe-stacks --stack-name my-aurora-serverless-stack --query "Stacks[0].Outputs[?OutputKey=='DBPort'].OutputValue" --output text)
+          RDS_SECRET_ARN=$(aws cloudformation describe-stacks --stack-name my-aurora-serverless-stack --query "Stacks[0].Outputs[?OutputKey=='DBSecretArn'].OutputValue" --output text)
+          echo "RDS_HOST=$RDS_HOST" >> $GITHUB_ENV
+          echo "RDS_PORT=$RDS_PORT" >> $GITHUB_ENV
+          echo "RDS_SECRET_ARN=$RDS_SECRET_ARN" >> $GITHUB_ENV
+
+      - name: Deploy Lambda S3 Bucket Stack
+        run: |
+          aws cloudformation deploy \
+            --template-file infra/s3.yaml \
+            --stack-name my-lambda-bucket-stack \
+            --capabilities CAPABILITY_NAMED_IAM
+
+      - name: Get Lambda S3 Bucket Name
+        id: get-lambda-bucket
+        run: |
+          LAMBDA_S3_BUCKET=$(aws cloudformation describe-stacks --stack-name my-lambda-bucket-stack --query "Stacks[0].Outputs[?OutputKey=='LambdaCodeBucketName'].OutputValue" --output text)
+          echo "LAMBDA_S3_BUCKET=$LAMBDA_S3_BUCKET" >> $GITHUB_ENV
+
+      - name: Build create_table Lambda package
+        run: |
+          cd scripts/create_table
+          pip install -r requirements.txt -t ./package
+          cp lambda.py ./package/
+          cd package
+          zip -r ../create_table.zip .
+          cd ../..
+
+      - name: Build insert_table Lambda package
+        run: |
+          cd scripts/insert_table
+          pip install -r requirements.txt -t ./package
+          cp lambda.py ./package/
+          cd package
+          zip -r ../insert_table.zip .
+          cd ../..
+
+      - name: Upload Lambda zips to S3
+        run: |
+          aws s3 cp scripts/create_table/create_table.zip s3://$LAMBDA_S3_BUCKET/create_table.zip
+          aws s3 cp scripts/insert_table/insert_table.zip s3://$LAMBDA_S3_BUCKET/insert_table.zip
+
+      - name: Deploy Lambda Functions
+        run: |
+          aws cloudformation deploy \
+            --template-file infra/lambda.yaml \
+            --stack-name my-lambda-stack \
+            --capabilities CAPABILITY_NAMED_IAM \
+            --parameter-overrides \
+              LambdaCodeBucketName=$LAMBDA_S3_BUCKET \
+              CreateTableZipKey=create_table.zip \
+              InsertTableZipKey=insert_table.zip \
+              RdsHost=$RDS_HOST \
+              RdsPort=$RDS_PORT \
+              RdsDb=${{ secrets.RDS_DB }} \
+              RdsTable=ships \
+              RdsSecretArn=$RDS_SECRET_ARN \
+              VpcSubnetIds="$PRIVATE_SUBNET_IDS" \
+              SecurityGroupIds="$APP_SG_ID"
