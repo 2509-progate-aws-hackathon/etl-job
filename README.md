@@ -92,4 +92,3 @@ scripts/
 - **GitHub Actions & CloudFormation**: CI/CD パイプラインで CloudFormation テンプレートを用いて全リソースを自動構築
 
 この構成により、セキュアかつ自動化されたデータ処理基盤を AWS 上に構築できます。
-
