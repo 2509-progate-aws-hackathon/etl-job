@@ -3,13 +3,13 @@ import io
 import json
 import requests
 import pandas as pd
-import pymysql
+import psycopg2
 import boto3
 from sqlalchemy import create_engine
 
 # RDS接続情報（Secrets Managerから取得）
 RDS_HOST = os.environ.get('RDS_HOST')
-RDS_PORT = int(os.environ.get('RDS_PORT', 3306))
+RDS_PORT = int(os.environ.get('RDS_PORT', 5432))
 RDS_DB = os.environ.get('RDS_DB')
 RDS_TABLE = os.environ.get('RDS_TABLE')
 SECRET_ARN = os.environ.get('RDS_SECRET_ARN')
@@ -90,7 +90,7 @@ def main():
     ]
 
     df_final = df[schema_columns].copy()
-    engine = create_engine(f"mysql+pymysql://{user}:{password}@{RDS_HOST}:{RDS_PORT}/{RDS_DB}?charset=utf8mb4")
+    engine = create_engine(f"postgresql+psycopg2://{user}:{password}@{RDS_HOST}:{RDS_PORT}/{RDS_DB}")
     df_final.to_sql(RDS_TABLE, con=engine, if_exists='append', index=False)
 
 def lambda_handler(event, context):
