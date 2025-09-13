@@ -9,6 +9,8 @@ RDS_HOST = os.environ.get('RDS_HOST')
 print(f"debug: RDS_PORT: {os.environ.get('RDS_PORT')}")
 RDS_PORT = 5432
 RDS_DB = os.environ.get('RDS_DB')
+print(f"debug: RDS_DB: {RDS_DB}")
+RDS_DB = "mydatabase"
 SECRET_ARN = os.environ.get('RDS_SECRET_ARN')  # Secrets ManagerのARN
 
 def get_db_credentials(secret_arn):
