@@ -1,4 +1,4 @@
-AWSTemplateFormatVersion: '2010-09-09'
+AWSTemplateFormatVersion: "2010-09-09"
 Description: Aurora Serverless v2 PostgreSQL Cluster using AWS Secrets Manager for master credentials (Tokyo-region, scale-to-zero capable default)
 
 Parameters:
@@ -17,23 +17,22 @@ Parameters:
     Description: The name of the initial database to create
   EngineVersion:
     Type: String
-    Default: '13.15'
+    Default: "13.15"
     Description: Aurora PostgreSQL engine version (must support zero-capacity / auto-pause; e.g. 13.15+, 14.12+, etc.)
   MinCapacityACU:
     Type: Number
-    Default: 0
-    Description: Minimum Aurora ACU capacity (0 = supports scale-to-zero if engine version supports)
+    Default: 1
+    Description: Minimum Aurora ACU capacity (1 = always running, reduces cold start)
   MaxCapacityACU:
     Type: Number
-    Default: 1
+    Default: 2
     Description: Maximum Aurora ACU capacity
   SecondsUntilAutoPause:
     Type: Number
-    Default: 300
-    Description: Number of seconds of inactivity before auto-pause
+    Default: 3600
+    Description: Number of seconds of inactivity before auto-pause (set longer to avoid frequent pause)
 
 Resources:
-
   DBMasterUserSecret:
     Type: AWS::SecretsManager::Secret
     Properties:
@@ -75,8 +74,24 @@ Resources:
       Engine: aurora-postgresql
       EngineVersion: !Ref EngineVersion
       DatabaseName: !Ref DatabaseName
-      MasterUsername: !Join ['', ['{{resolve:secretsmanager:', !Ref DBMasterUserSecret, ':SecretString:username}}']]
-      MasterUserPassword: !Join ['', ['{{resolve:secretsmanager:', !Ref DBMasterUserSecret, ':SecretString:password}}']]
+      MasterUsername:
+        !Join [
+          "",
+          [
+            "{{resolve:secretsmanager:",
+            !Ref DBMasterUserSecret,
+            ":SecretString:username}}",
+          ],
+        ]
+      MasterUserPassword:
+        !Join [
+          "",
+          [
+            "{{resolve:secretsmanager:",
+            !Ref DBMasterUserSecret,
+            ":SecretString:password}}",
+          ],
+        ]
       DBSubnetGroupName: !Ref DBSubnetGroup
       VpcSecurityGroupIds:
         - !Ref DBSecurityGroup
