@@ -54,7 +54,6 @@ jobs:
               VpcId=$VPC_ID \
               PrivateSubnetIds="$PRIVATE_SUBNET_IDS" \
               AccessSecurityGroupId=$APP_SG_ID \
-              DatabaseName=${{ secrets.RDS_DB }} \
               EngineVersion=13.15
 
       - name: Get RDS Outputs
