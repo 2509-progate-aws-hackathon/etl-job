@@ -120,3 +120,17 @@ jobs:
               RdsSecretArn=$RDS_SECRET_ARN \
               VpcSubnetIds="$PRIVATE_SUBNET_IDS" \
               SecurityGroupIds="$APP_SG_ID"
+
+      - name: Update create_table Lambda function code
+        run: |
+          aws lambda update-function-code \
+            --function-name create-table-job \
+            --s3-bucket $LAMBDA_S3_BUCKET \
+            --s3-key create_table.zip
+
+      - name: Update insert_table Lambda function code
+        run: |
+          aws lambda update-function-code \
+            --function-name insert-table-job \
+            --s3-bucket $LAMBDA_S3_BUCKET \
+            --s3-key insert_table.zip
