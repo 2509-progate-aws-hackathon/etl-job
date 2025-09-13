@@ -13,7 +13,7 @@ Parameters:
     Description: Security group ID that will need access (e.g. AppSync or Lambda SG)
   DatabaseName:
     Type: String
-    Default: mydatabase
+    Default: mydatabase1
     Description: The name of the initial database to create
   EngineVersion:
     Type: String
