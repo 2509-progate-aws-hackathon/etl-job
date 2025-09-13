@@ -11,7 +11,7 @@ Parameters:
   AccessSecurityGroupId:
     Type: AWS::EC2::SecurityGroup::Id
     Description: Security group ID that will need access (e.g. AppSync or Lambda SG)
-  DatabaseName:
+  DatabaseNameA:
     Type: String
     Default: mydatabase1
     Description: The name of the initial database to create
@@ -69,7 +69,7 @@ Resources:
     Properties:
       Engine: aurora-postgresql
       EngineVersion: !Ref EngineVersion
-      DatabaseName: !Ref DatabaseName
+      DatabaseName: !Ref DatabaseNameA
       MasterUsername:
         !Join [
           "",
