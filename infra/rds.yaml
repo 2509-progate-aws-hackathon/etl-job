@@ -84,7 +84,6 @@ Resources:
         MinCapacity: !Ref MinCapacityACU
         MaxCapacity: !Ref MaxCapacityACU
         SecondsUntilAutoPause: !Ref SecondsUntilAutoPause
-      PubliclyAccessible: false
       BackupRetentionPeriod: 1
       DeletionProtection: false
 
