@@ -27,10 +27,6 @@ Parameters:
     Type: Number
     Default: 2
     Description: Maximum Aurora ACU capacity
-  SecondsUntilAutoPause:
-    Type: Number
-    Default: 3600
-    Description: Number of seconds of inactivity before auto-pause (set longer to avoid frequent pause)
 
 Resources:
   DBMasterUserSecret:
@@ -98,7 +94,6 @@ Resources:
       ServerlessV2ScalingConfiguration:
         MinCapacity: !Ref MinCapacityACU
         MaxCapacity: !Ref MaxCapacityACU
-        SecondsUntilAutoPause: !Ref SecondsUntilAutoPause
       BackupRetentionPeriod: 1
       DeletionProtection: false
 
