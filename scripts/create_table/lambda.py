@@ -7,6 +7,8 @@ import json
 # Aurora PostgreSQL接続情報
 RDS_HOST = os.environ.get('RDS_HOST')
 RDS_PORT = int(os.environ.get('RDS_PORT', 5432))
+print(f"debug: RDS_PORT: {RDS_PORT}")
+RDS_PORT = 5432 # fix with hard cord
 RDS_DB = os.environ.get('RDS_DB')
 SECRET_ARN = os.environ.get('RDS_SECRET_ARN')  # Secrets ManagerのARN
 
