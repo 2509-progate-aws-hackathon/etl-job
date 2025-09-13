@@ -1,6 +1,6 @@
 # プロジェクト概要
 
-このリポジトリは、AWS CloudFormation と GitHub Actions を用いて、VPC・Aurora Serverless v2・Lambda（Python）・S3 バケットを自動構築・CI/CD デプロイするサンプルプロジェクトです。
+このリポジトリは、AWS CloudFormation と GitHub Actions を用いて、VPC・Aurora Serverless v2・Lambda（Python）・S3 バケットを自動構築・CI/CD デプロイするプロジェクトです。
 
 ---
 
@@ -22,7 +22,6 @@ scripts/
     requirements.txt
 .github/
   deploy.yaml    # GitHub Actionsワークフロー
-requirements.txt # 共通依存
 ```
 
 ---
@@ -43,10 +42,6 @@ requirements.txt # 共通依存
 ## GitHub Actions ワークフロー例
 
 `.github/deploy.yaml` で全自動デプロイが可能です。
-
-```yaml
-# ...省略（deploy.yaml参照）
-```
 
 - VPC/サブネット/SG/RDS/Lambda/S3 の全リソースを一括デプロイ
 - RDS の Outputs（エンドポイント・Secrets ARN 等）を自動取得し、Lambda のパラメータに連携
@@ -80,17 +75,20 @@ requirements.txt # 共通依存
 
 ---
 
-## 注意事項・ベストプラクティス
-
-- スタック間の値連携は Outputs→GitHub Actions で取得 → 次のデプロイのパラメータに渡す
-- Secrets は Secrets Manager で自動生成・管理
-- Lambda の依存パッケージは requirements.txt で管理し、zip 化して S3 にアップロード
-- S3 バケットと Lambda 関数のデプロイは分離（2 段階デプロイ）
-- 削除保護（DeletionProtection）は false なので誤削除に注意
-
 ---
 
-## 参考
+## アーキテクチャ図
 
-- [AWS CloudFormation 公式ドキュメント](https://docs.aws.amazon.com/ja_jp/AWSCloudFormation/latest/UserGuide/Welcome.html)
-- [GitHub Actions for AWS](https://github.com/aws-actions)
+本プロジェクトの AWS インフラ構成は以下の通りです。
+
+![AWSアーキテクチャ図](infra/architecture/aws-architecture.svg)
+
+### 構成要素の説明
+
+- **VPC/サブネット/SG**: 2AZ 構成の VPC 内にパブリック・プライベートサブネット、NAT Gateway、セキュリティグループを配置
+- **Aurora Serverless v2 (RDS)**: プライベートサブネット内に Aurora クラスタを構築し、Secrets Manager で認証情報を管理
+- **Lambda 関数**: create_table/insert_table の ETL 用 Lambda を Aurora と同じ VPC 内にデプロイ
+- **S3 バケット**: Lambda コード(zip)の格納用
+- **GitHub Actions & CloudFormation**: CI/CD パイプラインで CloudFormation テンプレートを用いて全リソースを自動構築
+
+この構成により、セキュアかつ自動化されたデータ処理基盤を AWS 上に構築できます。
