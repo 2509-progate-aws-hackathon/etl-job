@@ -1,6 +1,7 @@
 # プロジェクト概要
 
 このリポジトリは、AWS CloudFormation と GitHub Actions を用いて、VPC・Aurora Serverless v2・Lambda（Python）・S3 バケットを自動構築・CI/CD デプロイするプロジェクトです。
+
 実際にはEC2とSagemaker notebookのインスタンス上でETL処理を実行したため、このリポジトリはハッカソンでは使用しませんでした
 
 ---
